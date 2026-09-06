@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-The reviewed source is published on the configured public branch. Public Site version 3 remains live from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; private Site version 4 is saved from CSS-repair SHA `8e6656d8e772ee92f3c2839d7764e853b50e69e6` and is not deployed. Separate isolated QA observed WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. The CSS repair still needs a fresh 390px browser confirmation. No browser/CUA was run in this source/preparation lane, and no device, human, full-v1, or sustained-performance claim is made.
+The reviewed source is published on the configured public branch. Public Site version 3 remains live from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; version 4 from `8e6656d…` remains an obsolete undeployed candidate; private Site version 5 is saved from CSS-repair SHA `35f5d4005835df184d106b4a96d122d2b95296fc` and is not deployed. Separate isolated QA observed WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. The shared output-button sizing repair still needs fresh 1280px and 390px browser confirmation. No browser/CUA was run in this source/preparation lane, and no device, human, full-v1, or sustained-performance claim is made.
 
 ## Limits
 
