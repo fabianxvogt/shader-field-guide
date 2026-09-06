@@ -7,7 +7,8 @@
 - [x] Site version 3 deployed as a public preview from exact product source `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`: [shader-field-guide.fabian523417.chatgpt.site](https://shader-field-guide.fabian523417.chatgpt.site).
 - [x] CSS-only 390px output-row repair published at exact source `8e6656d8e772ee92f3c2839d7764e853b50e69e6`; it does not alter live version 3.
 - [x] Shared output-button sizing repair published at exact source `35f5d4005835df184d106b4a96d122d2b95296fc`; it does not alter live version 3.
-- [x] Private Site version 5 saved from exact source `35f5d4005835df184d106b4a96d122d2b95296fc`; it remains undeployed pending independent 1280/390px confirmation and root decision. Version 4 from `8e6656d…` remains an obsolete undeployed candidate.
+- [x] Versions 4 and 5 remain obsolete undeployed candidates; the clean 59-file package revision keeps product bytes at accepted source `35f5d4005835df184d106b4a96d122d2b95296fc` and excludes only incidental `dist/server/.wrangler` cache sidecars.
+- [x] Actual 35f desktop/narrow browser smoke passed output-control reachability at 1280px and 390px with WebGL2 live and no page/console errors; this is bounded evidence, not full-v1 acceptance.
 - [x] Independent review blockers repaired: parser grammar/type checks, finite/range parameter validation, edited-expression CPU fallback, challenge semantics, bounded notebook input, and storage hydration/merge guards.
 - [x] Standalone repository rooted at this project, branch `codex/v1`.
 - [x] Five progressive visual lessons with reviewed starting equations.
@@ -30,7 +31,7 @@
 - [x] Separate isolated browser QA accepted the bounded notebook/WebGL scope; no browser/CUA rerun was used during publication.
 - [x] Public preview gate: isolated notebook/WebGL QA passed before deployment and the served public asset proof matched the reviewed package.
 - [x] Version 4 is retained as an obsolete undeployed candidate; version 3 remains the live public preview.
-- [ ] Confirm version 5 at real 1280px and 390px viewports, then decide whether to deploy it; version 3 remains the live public preview meanwhile.
+- [ ] Root decide whether to deploy the new private clean-package revision; version 3 remains the live public preview meanwhile.
 - [ ] Root continue the separate full-v1, human, device, and sustained-performance review; no such claim is made here.
 
 ## Later

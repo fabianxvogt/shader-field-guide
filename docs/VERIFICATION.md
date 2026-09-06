@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-The reviewed source is published on the configured public branch. Public Site version 3 remains live from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; version 4 from `8e6656d…` remains an obsolete undeployed candidate; private Site version 5 is saved from CSS-repair SHA `35f5d4005835df184d106b4a96d122d2b95296fc` and is not deployed. Separate isolated QA observed WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. The shared output-button sizing repair still needs fresh 1280px and 390px browser confirmation. No browser/CUA was run in this source/preparation lane, and no device, human, full-v1, or sustained-performance claim is made.
+The reviewed source is published on the configured public branch. Public Site version 3 remains live from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; versions 4 and 5 remain obsolete undeployed candidates. The new saved revision contains accepted product bytes from `35f5d4005835df184d106b4a96d122d2b95296fc` plus this documentation-only release record and uses a clean 59-file package with only `dist/server/.wrangler` cache sidecars excluded. Actual 35f desktop/narrow smoke passed output-control reachability at 1280px and 390px with WebGL2 live and no page/console errors. No deployment, full-v1, device, human, or sustained-performance claim is made.
 
 ## Limits
 
