@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LESSONS, LIMITS, challengeStatus, evaluateFieldAt, makeFragmentShader, normalizeParameter, validateExpression, validateParameters, type ShaderParams } from '../lib/shader-engine.ts';
+import { downloadBlob, downloadText, DOWNLOAD_CLEANUP_DELAY_MS, requestPngBlob } from '../lib/export-utils.ts';
+import { LESSONS, LIMITS, challengeStatus, evaluateFieldAt, makeConfig, makeFragmentShader, normalizeParameter, validateExpression, validateParameters, type ShaderParams } from '../lib/shader-engine.ts';
 
 void test('all five lessons have valid bounded expressions and generated source', () => {
   assert.equal(LESSONS.length, 5);
@@ -55,4 +56,61 @@ void test('challenge checks inspect meaningful lesson properties', () => {
   assert.equal(challengeStatus(LESSONS[0], { centerX: 0.4, centerY: 0 }, LESSONS[0].expression).pass, false);
   assert.equal(challengeStatus(LESSONS[3], { cells: 5 }, LESSONS[3].expression).pass, true);
   assert.equal(challengeStatus(LESSONS[4], { speed: 0.4, drift: 0.2 }, LESSONS[4].expression).pass, true);
+});
+
+void test('exports contain real parseable fragment source and configuration', async () => {
+  const lesson = LESSONS[1];
+  const expression = 'length(p) - u_radius';
+  const source = makeFragmentShader(lesson, expression);
+  const configText = JSON.stringify(makeConfig(lesson, lesson.defaults, expression));
+  const downloaded: Blob[] = [];
+  let cleanup: (() => void) | undefined;
+  const environment = {
+    createAnchor: () => ({ href: '', download: '', rel: '', click: () => undefined, remove: () => undefined }),
+    appendAnchor: () => undefined,
+    createObjectURL: (blob: Blob) => { downloaded.push(blob); return `blob:${downloaded.length}`; },
+    revokeObjectURL: () => undefined,
+    scheduleCleanup: (callback: () => void) => { cleanup = callback; },
+  };
+  downloadText(source, 'lesson.frag', 'text/plain', environment);
+  downloadText(configText, 'lesson.json', 'application/json', environment);
+  assert.equal(await downloaded[0].text(), source);
+  const parsed = JSON.parse(await downloaded[1].text()) as { format: string; version: number; expression: string };
+  assert.equal(parsed.format, 'shader-field-guide-config');
+  assert.equal(parsed.version, 1);
+  assert.equal(parsed.expression, expression);
+  cleanup?.();
+});
+
+void test('download lifecycle defers URL and anchor cleanup after the click', () => {
+  const events: string[] = [];
+  let cleanup: (() => void) | undefined;
+  let revoked = '';
+  const anchor = { href: '', download: '', rel: '', click: () => events.push('click'), remove: () => events.push('remove') };
+  const result = downloadBlob(new Blob(['source'], { type: 'text/plain' }), 'lesson.frag', {
+    createAnchor: () => anchor,
+    appendAnchor: () => events.push('append'),
+    createObjectURL: () => 'blob:lesson',
+    revokeObjectURL: (url) => { revoked = url; events.push('revoke'); },
+    scheduleCleanup: (callback, delayMs) => { assert.equal(delayMs, DOWNLOAD_CLEANUP_DELAY_MS); cleanup = callback; },
+  });
+  assert.equal(result.filename, 'lesson.frag');
+  assert.deepEqual(events, ['append', 'click']);
+  assert.equal(revoked, '');
+  cleanup?.();
+  assert.deepEqual(events, ['append', 'click', 'remove', 'revoke']);
+});
+
+void test('PNG capture reports valid output only and recovers from null or throw', async () => {
+  const valid = await requestPngBlob({ toBlob: (callback) => callback(new Blob(['png'], { type: 'image/png' })) });
+  assert.equal(valid.ok, true);
+  if (valid.ok) assert.equal(await valid.blob.text(), 'png');
+
+  const missing = await requestPngBlob({ toBlob: (callback) => callback(null) });
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.match(missing.message, /Try again/);
+
+  const thrown = await requestPngBlob({ toBlob: () => { throw new Error('canvas unavailable'); } });
+  assert.equal(thrown.ok, false);
+  if (!thrown.ok) assert.match(thrown.message, /Try again/);
 });

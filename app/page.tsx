@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { downloadBlob, downloadText, requestPngBlob } from '@/lib/export-utils';
 import {
   LESSONS,
   LIMITS,
@@ -52,19 +53,6 @@ const MAX_VARIATIONS = 20;
 const VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`;
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadText(content: string, filename: string, type = 'text/plain') {
-  downloadBlob(new Blob([content], { type }), filename);
-}
 
 function formatValue(value: number, step: number) {
   return step < 0.1 ? value.toFixed(2) : value.toFixed(1);
@@ -365,8 +353,27 @@ export default function Home() {
       setVariations((previous) => mergeVariations(valid, previous)); setNotice(`Imported ${valid.length} variation${valid.length === 1 ? '' : 's'}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not read that notebook.'); }
   };
-  const exportGLSL = () => { downloadText(makeFragmentShader(lesson, compiledExpression), `shader-field-guide-lesson-${lesson.id}.frag`); downloadText(JSON.stringify(makeConfig(lesson, params, compiledExpression), null, 2), `shader-field-guide-lesson-${lesson.id}.json`, 'application/json'); setNotice('GLSL source and its configuration exported.'); };
-  const exportPNG = () => { canvasRef.current?.toBlob((blob) => { if (blob) downloadBlob(blob, `shader-field-guide-lesson-${lesson.id}.png`); }, 'image/png'); setNotice('PNG snapshot exported from the current canvas.'); };
+  const exportGLSL = () => {
+    downloadText(makeFragmentShader(lesson, compiledExpression), `shader-field-guide-lesson-${lesson.id}.frag`);
+    setNotice('GLSL source generated. Download started.');
+  };
+  const exportConfig = () => {
+    downloadText(JSON.stringify(makeConfig(lesson, params, compiledExpression), null, 2), `shader-field-guide-lesson-${lesson.id}.json`, 'application/json');
+    setNotice('Configuration JSON generated. Download started.');
+  };
+  const exportPNG = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) { setNotice('PNG export failed: the live canvas is not ready. Try again.'); return; }
+    setNotice('Generating PNG still…');
+    const result = await requestPngBlob(canvas);
+    if (!result.ok) { setNotice(result.message); return; }
+    try {
+      downloadBlob(result.blob, `shader-field-guide-lesson-${lesson.id}.png`);
+      setNotice('PNG still generated. Download started.');
+    } catch {
+      setNotice('PNG export failed to start the download. Try again.');
+    }
+  };
 
   return (
     <main className="guide-app">
@@ -391,7 +398,7 @@ export default function Home() {
           <section className="panel expression-panel"><div className="panel-heading"><div><span className="eyebrow">02 / BOUNDED SOURCE</span><h2>Expression</h2></div><span className="cap-badge">{LIMITS.maxLength} chars max</span></div><p className="panel-copy">Edit the highlighted term only. The guide accepts numbers, named uniforms, vectors, and a small math vocabulary—no loops, macros, recursion, or hidden workload.</p><label className="sr-only" htmlFor="expression">Bounded GLSL expression</label><textarea id="expression" className={`code-input ${compileState === 'error' ? 'has-error' : ''}`} value={draftExpression} onChange={(event) => { setDraftExpression(event.target.value); setCompileState('draft'); setCompileMessage('Draft changed · compile to see it live'); }} spellCheck={false} rows={4} /><div className="source-meta"><span>depth ≤ {LIMITS.maxDepth}</span><span>ops ≤ {LIMITS.maxOperations}</span><span>GLSL ES 3.00</span></div><Button className="compile-button" onClick={compileDraft}><Sparkles /> Compile expression</Button><output className={`compile-status status-${compileState}`}><span className="status-icon">{compileState === 'error' ? '!' : compileState === 'draft' ? '·' : '✓'}</span><span>{compileMessage}</span></output></section>
           <section className="panel compare-panel"><div className="panel-heading"><div><span className="eyebrow">03 / SEE THE SHIFT</span><h2>Before / after</h2></div><History size={18} /></div><div className="compare-strip"><div className="compare-tile">{beforeImage ? <img src={beforeImage} alt="Previous compiled field" /> : <div className="compare-empty">Compile once<br />to set a baseline</div>}<span>BEFORE</span></div><div className="compare-arrow">→</div><div className="compare-tile current-tile"><canvas className="mini-canvas" ref={miniCanvasRef} /><span>NOW</span></div></div></section>
           <section className="panel notebook-panel"><div className="panel-heading"><div><span className="eyebrow">04 / KEEP YOUR THREAD</span><h2>Personal notebook</h2></div><Save size={18} /></div><div className="save-row"><input value={variationName} onChange={(event) => setVariationName(event.target.value)} aria-label="Variation name" /><Button size="sm" onClick={() => saveVariation()}><Save /> Save</Button></div><div className="notebook-actions"><Button variant="outline" size="sm" onClick={undo} disabled={!history.length}><Undo2 /> Undo</Button><Button variant="outline" size="sm" onClick={resetLesson}><RotateCcw /> Reset</Button></div><div className="variation-list">{variations.length === 0 ? <p className="empty-note">Saved variations stay on this device. Export the notebook for a portable copy.</p> : variations.slice(0, 4).map((item) => <div className="variation-item" key={item.id}><button className="variation-load" aria-label={`Load ${item.name}`} onClick={() => loadVariation(item)}><span className="variation-swatch" /><span><strong>{item.name}</strong><small>Lesson {String(item.lessonId).padStart(2, '0')}</small></span></button><button className="icon-button" onClick={() => setVariations((previous) => previous.filter((entry) => entry.id !== item.id))} aria-label={`Delete ${item.name}`}><Trash2 size={14} /></button></div>)}</div><div className="file-actions"><Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}><Import /> Import</Button><Button variant="ghost" size="sm" onClick={exportNotebook}><Download /> Export</Button><input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importNotebook} hidden /></div></section>
-          <section className="panel export-panel"><div className="panel-heading"><div><span className="eyebrow">05 / TAKE IT WITH YOU</span><h2>Useful outputs</h2></div><Download size={18} /></div><p className="panel-copy">Leave with the exact source, the parameter configuration, or a PNG still—not a screenshot of the interface.</p><div className="export-grid"><Button variant="outline" size="sm" onClick={exportGLSL}><FileJson /> GLSL + config</Button><Button variant="outline" size="sm" onClick={exportPNG}><ImageDown /> PNG still</Button></div><label className="motion-toggle"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /><span>Reduce motion</span><small>freeze time-driven movement</small></label></section>
+          <section className="panel export-panel"><div className="panel-heading"><div><span className="eyebrow">05 / TAKE IT WITH YOU</span><h2>Useful outputs</h2></div><Download size={18} /></div><p className="panel-copy">Leave with the exact source, the parameter configuration, or a PNG still—not a screenshot of the interface.</p><div className="export-grid"><Button variant="outline" size="sm" onClick={exportGLSL}><Download /> GLSL source</Button><Button variant="outline" size="sm" onClick={exportConfig}><FileJson /> Config JSON</Button><Button variant="outline" size="sm" onClick={exportPNG}><ImageDown /> PNG still</Button></div><label className="motion-toggle"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /><span>Reduce motion</span><small>freeze time-driven movement</small></label></section>
           <p className="support-note">WebGL2 is preferred for live GLSL. If unavailable, the Canvas fallback keeps the lesson interactive. This app does not claim driver-timeout guarantees.</p>
         </aside>
       </div>
