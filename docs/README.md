@@ -8,7 +8,7 @@ The project is Catalog ID 62. The root delivery standard is the governing releas
 ## Public source and release status
 
 - Public ordinary source: [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`.
-- Accepted product/release source: `eba27afc76ae24e9035de1eeca5fecde5f1cd245`.
-- Private Sites version 2 was saved from that source and remains undeployed.
+- Accepted product source: `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`.
+- Private Sites version 3 was saved from that exact source and remains undeployed; superseded version 2 also remains undeployed.
 - No CI workflow is configured; local checks are not CI evidence.
 - Public source publication does not claim a public app, browser preview, full-v1, human, device, or performance acceptance.

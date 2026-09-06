@@ -3,8 +3,8 @@
 ## Now
 
 - Classification: **INCREMENTAL** — accepted implementation repair backed by source fixtures; no browser/device performance or learning-efficacy claim.
-- [x] Reviewed ordinary source published at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`, exact accepted product/release source `eba27afc76ae24e9035de1eeca5fecde5f1cd245`.
-- [x] Private Sites version 2 saved from the accepted source; it remains undeployed.
+- [x] Reviewed ordinary source published at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`, exact accepted product source `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`.
+- [x] Private Sites version 3 saved from that exact product source; it remains undeployed. Superseded version 2 also remains undeployed.
 - [x] Independent review blockers repaired: parser grammar/type checks, finite/range parameter validation, edited-expression CPU fallback, challenge semantics, bounded notebook input, and storage hydration/merge guards.
 - [x] Standalone repository rooted at this project, branch `codex/v1`.
 - [x] Five progressive visual lessons with reviewed starting equations.

@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-No browser/CUA, GitHub publication, Site registration/deployment, or actual-device visual review was performed. The root owner must independently inspect the exact source and actual visuals before granting that gate.
+The reviewed source is published on the configured public branch, and private Sites version 3 is saved from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; neither the saved version nor superseded version 2 is deployed. No browser/CUA or actual-device visual review was performed. The root owner must independently inspect the exact source and actual visuals before granting that gate.
 
 ## Limits
 
