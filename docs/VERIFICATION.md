@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-The reviewed source is published on the configured public branch. Public Site version 3 remains live from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; versions 4 and 5 remain obsolete undeployed candidates. The new saved revision contains accepted product bytes from `35f5d4005835df184d106b4a96d122d2b95296fc` plus this documentation-only release record and uses a clean 59-file package with only `dist/server/.wrangler` cache sidecars excluded. Actual 35f desktop/narrow smoke passed output-control reachability at 1280px and 390px with WebGL2 live and no page/console errors. No deployment, full-v1, device, human, or sustained-performance claim is made.
+The reviewed source is published on the configured public branch. Public Site version 6 is live from saved source revision `0ef3da730762ec5f3d6559e2762b197dd24b835a`, with unchanged runtime product SHA `35f5d4005835df184d106b4a96d122d2b95296fc`; versions 4 and 5 remain obsolete undeployed candidates. The clean package contains 59 logical payload files with only incidental local Wrangler cache sidecars excluded. Actual 35f desktop/narrow smoke passed output-control reachability at 1280px and 390px with WebGL2 live and no page/console errors. Post-deploy HTTP proof separately confirmed root `200 text/html` and 15/15 served client assets matching the reviewed manifest; HTML is not treated as a raw archive byte comparison. No full-v1, device, human, or sustained-performance claim is made.
 
 ## Limits
 
