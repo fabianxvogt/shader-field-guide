@@ -6,7 +6,9 @@ Shader Field Guide is a five-lesson, browser-first learning lab for people who w
 
 ## Status
 
-**Building / root review required.** This checkout is intentionally not opened in a browser, published to GitHub, or deployed to Sites in this task. No public URL is claimed.
+**Public source / root review required.** The reviewed ordinary source is public at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`. The accepted product/release source is `eba27afc76ae24e9035de1eeca5fecde5f1cd245` (`Repair shader export downloads`). Private Sites version 2 was saved from that source and remains undeployed. No public app URL is claimed.
+
+No CI workflow is configured, so no CI success is claimed. Browser preview, native export, WebGL/device behavior, full-v1, and human acceptance remain separate root gates.
 
 ## Run locally
 
@@ -31,6 +33,6 @@ The editable expression is capped at 240 characters, 96 tokens, nesting depth 8,
 
 ## Evidence and next gate
 
-Source fixtures cover all five lesson expressions, generated GLSL, injection rejection, caps, and challenge properties. Build and lint are required before root review. Actual browser/WebGL/device behavior, keyboard-first journey, persistence after refresh, export reopen, visual quality, and fallback behavior still require the independent root review gate.
+Source fixtures cover all five lesson expressions, generated GLSL, injection rejection, caps, challenge properties, and the bounded export lifecycle. The accepted source SHA is published above; build and lint are local checks, not CI evidence. Actual browser/WebGL/device behavior, keyboard-first journey, persistence after refresh, export reopen, visual quality, and fallback behavior still require the independent root review gate.
 
 See [ROADMAP.md](ROADMAP.md), [docs/README.md](docs/README.md), and [docs/SOURCES.md](docs/SOURCES.md).
