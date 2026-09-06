@@ -133,8 +133,8 @@ h1 { font-size:clamp(30px,4vw,49px); line-height:.98; letter-spacing:-.065em; ma
 .icon-button:hover { color:var(--hot); }
 .empty-note { color:var(--muted); font-size:11px; line-height:1.4; margin:10px 0; }
 .file-actions { justify-content:flex-end; gap:4px; margin-top:8px; }
-.export-grid { gap:7px; }
-.export-grid button { flex:1; min-width:0; }
+.export-grid { gap:7px; flex-wrap:wrap; }
+.export-grid button { flex:1 1 max-content; min-width:max-content; }
 .motion-toggle { gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); font-size:11px; flex-wrap:wrap; }
 .motion-toggle input { accent-color:var(--purple); width:15px; height:15px; }
 .motion-toggle small { color:var(--muted); width:100%; padding-left:23px; margin-top:-4px; font-size:10px; }
