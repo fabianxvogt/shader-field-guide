@@ -6,9 +6,9 @@ Shader Field Guide is a five-lesson, browser-first learning lab for people who w
 
 ## Status
 
-**Public source / root review required.** The reviewed ordinary source is public at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`. The accepted product/release source is `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a` (`Quiesce identical notebook storage adoption`). Private Sites version 3 was saved from that exact source and remains undeployed; superseded version 2 also remains undeployed. No public app URL is claimed.
+**Public preview / full-v1 still open.** The reviewed ordinary source is public at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`. The accepted product/release source is `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a` (`Quiesce identical notebook storage adoption`). Site version 3 is publicly previewable at [shader-field-guide.fabian523417.chatgpt.site](https://shader-field-guide.fabian523417.chatgpt.site), deployed from that exact product source. This is not a full-v1, device, human, or sustained-performance claim.
 
-No CI workflow is configured, so no CI success is claimed. Browser preview, native export, WebGL/device behavior, full-v1, and human acceptance remain separate root gates.
+No CI workflow is configured, so no CI success is claimed. The public preview is live; native export breadth, device parity, full-v1, and human acceptance remain separate root gates.
 
 ## Run locally
 
@@ -33,6 +33,6 @@ The editable expression is capped at 240 characters, 96 tokens, nesting depth 8,
 
 ## Evidence and next gate
 
-Source fixtures cover all five lesson expressions, generated GLSL, injection rejection, caps, challenge properties, and the bounded export lifecycle. The accepted product source SHA is published above; the saved private Site version uses that SHA, while documentation may advance independently. Build and lint are local checks, not CI evidence. Actual browser/WebGL/device behavior, keyboard-first journey, persistence after refresh, export reopen, visual quality, and fallback behavior still require the independent root review gate.
+Source fixtures cover all five lesson expressions, generated GLSL, injection rejection, caps, challenge properties, and the bounded export lifecycle. Separate isolated QA on the exact product source observed WebGL2, a real bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. The public root returned `200 text/html`; its real GLSL, notebook, Config JSON, and PNG controls are present, and all 15 public client assets from the reviewed 59-file package returned `200` with matching manifest hashes. Cloudflare may transform the HTML response, so it is not compared as a raw archive byte. Prior narrow GLSL/config/PNG export evidence remains applicable; exports were not broadly reaudited here. Build and lint are local checks, not CI evidence.
 
 See [ROADMAP.md](ROADMAP.md), [docs/README.md](docs/README.md), and [docs/SOURCES.md](docs/SOURCES.md).

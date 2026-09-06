@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-The reviewed source is published on the configured public branch, and private Sites version 3 is saved from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; neither the saved version nor superseded version 2 is deployed. No browser/CUA or actual-device visual review was performed. The root owner must independently inspect the exact source and actual visuals before granting that gate.
+The reviewed source is published on the configured public branch, and Site version 3 is publicly previewable from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`. Separate isolated QA observed WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. This publication lane used HTTP checks only: the root returned `200 text/html`, and all 15 public client assets returned `200` with hashes matching the reviewed package manifest. Cloudflare edge HTML transformation is expected; it is not treated as an asset mismatch. No browser/CUA was run in this publication lane, and no device, human, full-v1, or sustained-performance claim is made.
 
 ## Limits
 

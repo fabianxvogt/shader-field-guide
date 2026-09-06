@@ -9,6 +9,6 @@ The project is Catalog ID 62. The root delivery standard is the governing releas
 
 - Public ordinary source: [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`.
 - Accepted product source: `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`.
-- Private Sites version 3 was saved from that exact source and remains undeployed; superseded version 2 also remains undeployed.
+- Public preview: [shader-field-guide.fabian523417.chatgpt.site](https://shader-field-guide.fabian523417.chatgpt.site), Site version 3 deployed from that exact product source.
 - No CI workflow is configured; local checks are not CI evidence.
-- Public source publication does not claim a public app, browser preview, full-v1, human, device, or performance acceptance.
+- The preview is not a full-v1, human, device, or sustained-performance acceptance claim. Isolated QA covered WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. Public HTTP checks covered the root and all 15 public client assets; Cloudflare HTML transformation is expected and documented.
