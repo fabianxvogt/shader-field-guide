@@ -7,7 +7,7 @@
 - [x] Site version 6 deployed as the public preview from saved source revision `0ef3da730762ec5f3d6559e2762b197dd24b835a`, with unchanged accepted runtime product `35f5d4005835df184d106b4a96d122d2b95296fc`: [shader-field-guide.fabian523417.chatgpt.site](https://shader-field-guide.fabian523417.chatgpt.site).
 - [x] CSS-only 390px output-row repair published at exact source `8e6656d8e772ee92f3c2839d7764e853b50e69e6`; it is included in the reviewed v6 runtime.
 - [x] Shared output-button sizing repair published at exact source `35f5d4005835df184d106b4a96d122d2b95296fc`; it is included in the reviewed v6 runtime.
-- [x] Versions 4 and 5 remain obsolete undeployed candidates; the clean version 6 package keeps product bytes at accepted source `35f5d4005835df184d106b4a96d122d2b95296fc`, contains 59 logical payload files, and excludes only incidental local Wrangler cache sidecars.
+- [x] Versions 4 and 5 remain obsolete undeployed candidates; the clean version 6 package keeps product bytes at accepted source `35f5d4005835df184d106b4a96d122d2b95296fc` and contains 59 logical payload files.
 - [x] Actual 35f desktop/narrow browser smoke passed output-control reachability at 1280px and 390px with WebGL2 live and no page/console errors; this is bounded evidence, not full-v1 acceptance.
 - [x] Independent review blockers repaired: parser grammar/type checks, finite/range parameter validation, edited-expression CPU fallback, challenge semantics, bounded notebook input, and storage hydration/merge guards.
 - [x] Standalone repository rooted at this project, branch `codex/v1`.
