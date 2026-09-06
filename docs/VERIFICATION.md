@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-The reviewed source is published on the configured public branch. Public Site version 6 is live from saved source revision `0ef3da730762ec5f3d6559e2762b197dd24b835a`, with unchanged runtime product SHA `35f5d4005835df184d106b4a96d122d2b95296fc`; versions 4 and 5 remain obsolete undeployed candidates. The clean package contains 59 logical payload files. Actual 35f desktop/narrow smoke passed output-control reachability at 1280px and 390px with WebGL2 live and no page/console errors. Post-deploy HTTP proof separately confirmed root `200 text/html` and 15/15 served client assets matching the reviewed manifest; HTML is not treated as a raw archive byte comparison. No full-v1, device, human, or sustained-performance claim is made.
+The reviewed source is published on the configured public branch. Public Site version 7 is live from exact source `b05898e4db5f3ebd4fd1527e58d80ab7827fe248`, with the accepted runtime product plus the CSS-only intrinsic-width output-row repair; versions 4–6 remain retained historical candidates. The clean package contains 59 logical payload files. The b058 desktop/narrow browser review passed output-control content fit at 1280px and 390px with WebGL2 live and no page/console errors. Post-deploy HTTP proof separately confirmed root `200 text/html` and 15/15 served client assets matching the reviewed manifest; HTML is not treated as a raw archive byte comparison. No full-v1, device, human, or sustained-performance claim is made.
 
 ## Limits
 
