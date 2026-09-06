@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { downloadBlob, downloadText, DOWNLOAD_CLEANUP_DELAY_MS, requestPngBlob } from '../lib/export-utils.ts';
+import { hydrateNotebook, mergeVariations, parseNotebook, persistNotebook, type NotebookStorage, type Variation } from '../lib/notebook-storage.ts';
 import { LESSONS, LIMITS, challengeStatus, evaluateFieldAt, makeConfig, makeFragmentShader, normalizeParameter, validateExpression, validateParameters, type ShaderParams } from '../lib/shader-engine.ts';
 
 void test('all five lessons have valid bounded expressions and generated source', () => {
@@ -113,4 +114,51 @@ void test('PNG capture reports valid output only and recovers from null or throw
   const thrown = await requestPngBlob({ toBlob: () => { throw new Error('canvas unavailable'); } });
   assert.equal(thrown.ok, false);
   if (!thrown.ok) assert.match(thrown.message, /Try again/);
+});
+
+function makeVariation(id: string, name: string, lessonId: 1 | 2 = 2): Variation {
+  const lesson = LESSONS[lessonId - 1];
+  return { id, name, lessonId, expression: lesson.expression, params: lesson.defaults, savedAt: '2026-09-06T00:00:00.000Z' };
+}
+
+function memoryStorage(initial: string | null = null, failWrites = false): NotebookStorage & { value: string | null } {
+  const storage = {
+    value: initial,
+    getItem: () => storage.value,
+    setItem: (_key: string, value: string) => {
+      if (failWrites) throw new Error('storage unavailable');
+      storage.value = value;
+    },
+  };
+  return storage;
+}
+
+void test('notebook hydration merges an early save and survives a reload', () => {
+  const stored = makeVariation('stored', 'Stored work');
+  const early = makeVariation('early', 'Saved before hydration');
+  const storage = memoryStorage(JSON.stringify({ version: 1, revision: 4, writer: 'old-tab', variations: [stored] }));
+  const hydrated = hydrateNotebook(storage, [early]);
+  assert.deepEqual(hydrated.variations.map((item) => item.id), ['early', 'stored']);
+  const persisted = persistNotebook(storage, hydrated.variations, hydrated.revision, 'new-tab');
+  assert.equal(persisted.ok, true);
+  const reloaded = hydrateNotebook(storage).variations;
+  assert.deepEqual(reloaded.map((item) => item.id), ['early', 'stored']);
+  assert.equal(parseNotebook(storage.value)?.revision, 5);
+});
+
+void test('notebook storage failure retains in-memory work and malformed rows stay rejected', () => {
+  const valid = makeVariation('valid', 'Valid work');
+  const malformed = { ...makeVariation('bad', 'Bad work'), expression: 'p.x; alert(1)' };
+  const parsed = parseNotebook(JSON.stringify({ version: 1, revision: 2, writer: 'bad-input', variations: [valid, malformed] }));
+  assert.deepEqual(parsed?.variations.map((item) => item.id), ['valid']);
+
+  const storage = memoryStorage(null, true);
+  const persisted = persistNotebook(storage, [valid], 0, 'writer');
+  assert.equal(persisted.ok, false);
+  if (!persisted.ok) assert.equal(persisted.reason, 'full');
+  assert.deepEqual(persisted.variations, [valid]);
+  const hydrated = hydrateNotebook(storage, [valid]);
+  assert.equal(hydrated.storageAvailable, true);
+  assert.deepEqual(hydrated.variations, [valid]);
+  assert.deepEqual(mergeVariations([valid], []), [valid]);
 });

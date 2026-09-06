@@ -25,10 +25,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { downloadBlob, downloadText, requestPngBlob } from '@/lib/export-utils';
+import { hydrateNotebook, isPortableVariation, MAX_NOTEBOOK_BYTES, MAX_VARIATION_NAME_LENGTH, mergeVariations, parseNotebook, persistNotebook, STORAGE_KEY, type Variation } from '@/lib/notebook-storage';
 import {
   LESSONS,
   LIMITS,
-  MAX_VARIATION_NAME_LENGTH,
   type Lesson,
   type LessonId,
   type ShaderParams,
@@ -38,18 +38,12 @@ import {
   makeFragmentShader,
   normalizeParameter,
   validateExpression,
-  validateParameters,
 } from '@/lib/shader-engine';
 
 type RenderMode = 'webgl2' | 'fallback' | 'error';
 type CompileState = 'clean' | 'draft' | 'error';
 type Snapshot = { lessonId: LessonId; expression: string; params: ShaderParams };
-type Variation = Snapshot & { id: string; name: string; savedAt: string };
-type NotebookEnvelope = { version: 1; revision: number; writer: string; variations: Variation[] };
 
-const STORAGE_KEY = 'shader-field-guide:notebook:v1';
-const MAX_NOTEBOOK_BYTES = 64 * 1024;
-const MAX_VARIATIONS = 20;
 const VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`;
@@ -60,33 +54,6 @@ function formatValue(value: number, step: number) {
 
 function makeVariationId() {
   return `variation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function isPortableParams(value: unknown): value is ShaderParams {
-  if (!value || typeof value !== 'object') return false;
-  return Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
-}
-
-function isPortableVariation(value: unknown): value is Variation {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as Partial<Variation>;
-  const lesson = LESSONS.find((entry) => entry.id === item.lessonId);
-  return typeof item.id === 'string' && typeof item.name === 'string' && item.name.length > 0 && item.name.length <= MAX_VARIATION_NAME_LENGTH && typeof item.expression === 'string' && Boolean(lesson) && isPortableParams(item.params) && Boolean(lesson && validateParameters(lesson, item.params).ok) && validateExpression(item.expression).ok;
-}
-
-function parseNotebook(raw: string | null): NotebookEnvelope | null {
-  if (!raw || raw.length > MAX_NOTEBOOK_BYTES) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<NotebookEnvelope>;
-    if (parsed.version !== 1 || typeof parsed.revision !== 'number' || !Number.isFinite(parsed.revision) || !Array.isArray(parsed.variations)) return null;
-    return { version: 1, revision: parsed.revision, writer: typeof parsed.writer === 'string' ? parsed.writer : 'unknown', variations: parsed.variations.filter(isPortableVariation).slice(0, MAX_VARIATIONS) };
-  } catch { return null; }
-}
-
-function mergeVariations(primary: Variation[], secondary: Variation[]) {
-  const byId = new Map<string, Variation>();
-  for (const item of [...primary, ...secondary]) if (!byId.has(item.id)) byId.set(item.id, item);
-  return [...byId.values()].slice(0, MAX_VARIATIONS);
 }
 
 function getWebGL2(canvas: HTMLCanvasElement) {
@@ -187,6 +154,7 @@ export default function Home() {
   const [history, setHistory] = useState<Snapshot[]>([]);
   const [challengeComplete, setChallengeComplete] = useState(false);
   const [notice, setNotice] = useState('');
+  const [notebookHydrated, setNotebookHydrated] = useState(false);
   const storageReadyRef = useRef(false);
   const storageRevisionRef = useRef(0);
   const storageWriterRef = useRef(makeVariationId());
@@ -195,24 +163,20 @@ export default function Home() {
   useEffect(() => { lessonRef.current = lesson; paramsRef.current = params; expressionRef.current = compiledExpression; }, [compiledExpression, lesson, params]);
 
   useEffect(() => {
-    try {
-      const saved = parseNotebook(window.localStorage.getItem(STORAGE_KEY));
-      if (saved) { storageRevisionRef.current = saved.revision; setVariations(saved.variations); }
-    } catch { setNotice('Notebook storage is unavailable; exports still work.'); }
+    const hydrated = hydrateNotebook(window.localStorage);
+    storageRevisionRef.current = hydrated.revision;
+    setVariations((previous) => mergeVariations(previous, hydrated.variations));
+    if (!hydrated.storageAvailable) setNotice('Notebook storage is unavailable; exports still work.');
     storageReadyRef.current = true;
+    setNotebookHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!storageReadyRef.current) return;
-    try {
-      const persisted = parseNotebook(window.localStorage.getItem(STORAGE_KEY));
-      const merged = mergeVariations(variations, persisted?.variations ?? []);
-      const revision = Math.max(storageRevisionRef.current, persisted?.revision ?? 0) + 1;
-      storageRevisionRef.current = revision;
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, revision, writer: storageWriterRef.current, variations: merged } satisfies NotebookEnvelope));
-      if (merged.length !== variations.length || merged.some((item, index) => item.id !== variations[index]?.id)) setVariations(merged);
-    }
-    catch { setNotice('Notebook storage is full; export a notebook to keep your work.'); }
+    const persisted = persistNotebook(window.localStorage, variations, storageRevisionRef.current, storageWriterRef.current);
+    if (!persisted.ok) { setNotice(persisted.reason === 'unavailable' ? 'Notebook storage is unavailable; exports still work.' : 'Notebook storage is full; export a notebook to keep your work.'); return; }
+    storageRevisionRef.current = persisted.revision;
+    if (persisted.variations.length !== variations.length || persisted.variations.some((item, index) => item.id !== variations[index]?.id)) setVariations(persisted.variations);
   }, [variations]);
 
   useEffect(() => {
@@ -397,7 +361,7 @@ export default function Home() {
           <section className="panel controls-panel"><div className="panel-heading"><div><span className="eyebrow">01 / NUDGE A TERM</span><h2>Field controls</h2></div><Gauge size={18} /></div><div className="control-list">{lesson.parameters.map((control) => <div className="control-row" key={control.key}><div className="control-label"><label htmlFor={`control-${control.key}`}>{control.label}</label><output>{formatValue(params[control.key] ?? control.min, control.step)}</output></div><Slider id={`control-${control.key}`} min={control.min} max={control.max} step={control.step} value={[params[control.key] ?? control.min]} onValueChange={(value) => setParameter(control.key, Number((value as readonly number[])[0] ?? control.min))} aria-label={control.label} /><p>{control.help}</p></div>)}</div></section>
           <section className="panel expression-panel"><div className="panel-heading"><div><span className="eyebrow">02 / BOUNDED SOURCE</span><h2>Expression</h2></div><span className="cap-badge">{LIMITS.maxLength} chars max</span></div><p className="panel-copy">Edit the highlighted term only. The guide accepts numbers, named uniforms, vectors, and a small math vocabulary—no loops, macros, recursion, or hidden workload.</p><label className="sr-only" htmlFor="expression">Bounded GLSL expression</label><textarea id="expression" className={`code-input ${compileState === 'error' ? 'has-error' : ''}`} value={draftExpression} onChange={(event) => { setDraftExpression(event.target.value); setCompileState('draft'); setCompileMessage('Draft changed · compile to see it live'); }} spellCheck={false} rows={4} /><div className="source-meta"><span>depth ≤ {LIMITS.maxDepth}</span><span>ops ≤ {LIMITS.maxOperations}</span><span>GLSL ES 3.00</span></div><Button className="compile-button" onClick={compileDraft}><Sparkles /> Compile expression</Button><output className={`compile-status status-${compileState}`}><span className="status-icon">{compileState === 'error' ? '!' : compileState === 'draft' ? '·' : '✓'}</span><span>{compileMessage}</span></output></section>
           <section className="panel compare-panel"><div className="panel-heading"><div><span className="eyebrow">03 / SEE THE SHIFT</span><h2>Before / after</h2></div><History size={18} /></div><div className="compare-strip"><div className="compare-tile">{beforeImage ? <img src={beforeImage} alt="Previous compiled field" /> : <div className="compare-empty">Compile once<br />to set a baseline</div>}<span>BEFORE</span></div><div className="compare-arrow">→</div><div className="compare-tile current-tile"><canvas className="mini-canvas" ref={miniCanvasRef} /><span>NOW</span></div></div></section>
-          <section className="panel notebook-panel"><div className="panel-heading"><div><span className="eyebrow">04 / KEEP YOUR THREAD</span><h2>Personal notebook</h2></div><Save size={18} /></div><div className="save-row"><input value={variationName} onChange={(event) => setVariationName(event.target.value)} aria-label="Variation name" /><Button size="sm" onClick={() => saveVariation()}><Save /> Save</Button></div><div className="notebook-actions"><Button variant="outline" size="sm" onClick={undo} disabled={!history.length}><Undo2 /> Undo</Button><Button variant="outline" size="sm" onClick={resetLesson}><RotateCcw /> Reset</Button></div><div className="variation-list">{variations.length === 0 ? <p className="empty-note">Saved variations stay on this device. Export the notebook for a portable copy.</p> : variations.slice(0, 4).map((item) => <div className="variation-item" key={item.id}><button className="variation-load" aria-label={`Load ${item.name}`} onClick={() => loadVariation(item)}><span className="variation-swatch" /><span><strong>{item.name}</strong><small>Lesson {String(item.lessonId).padStart(2, '0')}</small></span></button><button className="icon-button" onClick={() => setVariations((previous) => previous.filter((entry) => entry.id !== item.id))} aria-label={`Delete ${item.name}`}><Trash2 size={14} /></button></div>)}</div><div className="file-actions"><Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}><Import /> Import</Button><Button variant="ghost" size="sm" onClick={exportNotebook}><Download /> Export</Button><input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importNotebook} hidden /></div></section>
+          <section className="panel notebook-panel"><div className="panel-heading"><div><span className="eyebrow">04 / KEEP YOUR THREAD</span><h2>Personal notebook</h2></div><Save size={18} /></div><div className="save-row"><input value={variationName} onChange={(event) => setVariationName(event.target.value)} aria-label="Variation name" /><Button size="sm" onClick={() => saveVariation()} disabled={!notebookHydrated}><Save /> Save</Button></div><div className="notebook-actions"><Button variant="outline" size="sm" onClick={undo} disabled={!history.length}><Undo2 /> Undo</Button><Button variant="outline" size="sm" onClick={resetLesson}><RotateCcw /> Reset</Button></div><div className="variation-list" aria-busy={!notebookHydrated}>{!notebookHydrated ? <p className="empty-note">Loading notebook…</p> : variations.length === 0 ? <p className="empty-note">Saved variations stay on this device. Export the notebook for a portable copy.</p> : variations.slice(0, 4).map((item) => <div className="variation-item" key={item.id}><button className="variation-load" aria-label={`Load ${item.name}`} onClick={() => loadVariation(item)}><span className="variation-swatch" /><span><strong>{item.name}</strong><small>Lesson {String(item.lessonId).padStart(2, '0')}</small></span></button><button className="icon-button" onClick={() => setVariations((previous) => previous.filter((entry) => entry.id !== item.id))} aria-label={`Delete ${item.name}`}><Trash2 size={14} /></button></div>)}</div><div className="file-actions"><Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}><Import /> Import</Button><Button variant="ghost" size="sm" onClick={exportNotebook}><Download /> Export</Button><input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importNotebook} hidden /></div></section>
           <section className="panel export-panel"><div className="panel-heading"><div><span className="eyebrow">05 / TAKE IT WITH YOU</span><h2>Useful outputs</h2></div><Download size={18} /></div><p className="panel-copy">Leave with the exact source, the parameter configuration, or a PNG still—not a screenshot of the interface.</p><div className="export-grid"><Button variant="outline" size="sm" onClick={exportGLSL}><Download /> GLSL source</Button><Button variant="outline" size="sm" onClick={exportConfig}><FileJson /> Config JSON</Button><Button variant="outline" size="sm" onClick={exportPNG}><ImageDown /> PNG still</Button></div><label className="motion-toggle"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /><span>Reduce motion</span><small>freeze time-driven movement</small></label></section>
           <p className="support-note">WebGL2 is preferred for live GLSL. If unavailable, the Canvas fallback keeps the lesson interactive. This app does not claim driver-timeout guarantees.</p>
         </aside>

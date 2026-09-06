@@ -14,6 +14,7 @@
 - [x] Local variation notebook with versioned JSON import/export.
 - [x] GLSL + configuration export and PNG snapshot export.
 - [x] Separate GLSL/config/PNG export actions with bounded download cleanup and visible PNG failure recovery.
+- [x] Notebook reload repair: hydration loading state, early-save merge, and storage-failure retention with source regression coverage.
 - [x] Source fixtures, lint, and production build scripts.
 - [x] Local source checks completed; no CI workflow is configured.
 
