@@ -5,6 +5,8 @@
 - Classification: **INCREMENTAL** — accepted implementation repair backed by source fixtures; no browser/device performance or learning-efficacy claim.
 - [x] Reviewed ordinary source published at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`, exact accepted product source `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`.
 - [x] Site version 3 deployed as a public preview from exact product source `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`: [shader-field-guide.fabian523417.chatgpt.site](https://shader-field-guide.fabian523417.chatgpt.site).
+- [x] CSS-only 390px output-row repair published at exact source `8e6656d8e772ee92f3c2839d7764e853b50e69e6`; it does not alter live version 3.
+- [x] Private Site version 4 saved from exact source `8e6656d8e772ee92f3c2839d7764e853b50e69e6`; it remains undeployed pending independent 390px confirmation and root decision.
 - [x] Independent review blockers repaired: parser grammar/type checks, finite/range parameter validation, edited-expression CPU fallback, challenge semantics, bounded notebook input, and storage hydration/merge guards.
 - [x] Standalone repository rooted at this project, branch `codex/v1`.
 - [x] Five progressive visual lessons with reviewed starting equations.
@@ -26,6 +28,7 @@
 - [ ] Root test malformed/oversized expression recovery, unsupported WebGL fallback, and export reopen.
 - [x] Separate isolated browser QA accepted the bounded notebook/WebGL scope; no browser/CUA rerun was used during publication.
 - [x] Public preview gate: isolated notebook/WebGL QA passed before deployment and the served public asset proof matched the reviewed package.
+- [ ] Confirm version 4 at a real 390px browser viewport, then decide whether to deploy it; version 3 remains the live public preview meanwhile.
 - [ ] Root continue the separate full-v1, human, device, and sustained-performance review; no such claim is made here.
 
 ## Later

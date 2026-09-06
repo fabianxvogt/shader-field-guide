@@ -15,7 +15,7 @@
 
 ## Deferred by instruction
 
-The reviewed source is published on the configured public branch, and Site version 3 is publicly previewable from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`. Separate isolated QA observed WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. This publication lane used HTTP checks only: the root returned `200 text/html`, and all 15 public client assets returned `200` with hashes matching the reviewed package manifest. Cloudflare edge HTML transformation is expected; it is not treated as an asset mismatch. No browser/CUA was run in this publication lane, and no device, human, full-v1, or sustained-performance claim is made.
+The reviewed source is published on the configured public branch. Public Site version 3 remains live from product SHA `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; private Site version 4 is saved from CSS-repair SHA `8e6656d8e772ee92f3c2839d7764e853b50e69e6` and is not deployed. Separate isolated QA observed WebGL2, bounded GLSL edit/compile, notebook save/reload/load/delete/reload, and two-tab convergence. The CSS repair still needs a fresh 390px browser confirmation. No browser/CUA was run in this source/preparation lane, and no device, human, full-v1, or sustained-performance claim is made.
 
 ## Limits
 
