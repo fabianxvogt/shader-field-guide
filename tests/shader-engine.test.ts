@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { downloadBlob, downloadText, DOWNLOAD_CLEANUP_DELAY_MS, requestPngBlob } from '../lib/export-utils.ts';
-import { hydrateNotebook, mergeVariations, parseNotebook, persistNotebook, type NotebookStorage, type Variation } from '../lib/notebook-storage.ts';
+import { deleteVariation, hydrateNotebook, mergeNotebookState, notebookSaveStatus, parseNotebook, persistNotebook, type NotebookStorage, type Variation } from '../lib/notebook-storage.ts';
 import { LESSONS, LIMITS, challengeStatus, evaluateFieldAt, makeConfig, makeFragmentShader, normalizeParameter, validateExpression, validateParameters, type ShaderParams } from '../lib/shader-engine.ts';
 
 void test('all five lessons have valid bounded expressions and generated source', () => {
@@ -137,12 +137,12 @@ void test('notebook hydration merges an early save and survives a reload', () =>
   const stored = makeVariation('stored', 'Stored work');
   const early = makeVariation('early', 'Saved before hydration');
   const storage = memoryStorage(JSON.stringify({ version: 1, revision: 4, writer: 'old-tab', variations: [stored] }));
-  const hydrated = hydrateNotebook(storage, [early]);
-  assert.deepEqual(hydrated.variations.map((item) => item.id), ['early', 'stored']);
-  const persisted = persistNotebook(storage, hydrated.variations, hydrated.revision, 'new-tab');
+  const hydrated = hydrateNotebook(storage, { variations: [early], deletedIds: [] });
+  assert.deepEqual(hydrated.state.variations.map((item) => item.id), ['early', 'stored']);
+  const persisted = persistNotebook(storage, hydrated.state, hydrated.revision, 'new-tab');
   assert.equal(persisted.ok, true);
-  const reloaded = hydrateNotebook(storage).variations;
-  assert.deepEqual(reloaded.map((item) => item.id), ['early', 'stored']);
+  const reloaded = hydrateNotebook(storage).state;
+  assert.deepEqual(reloaded.variations.map((item) => item.id), ['early', 'stored']);
   assert.equal(parseNotebook(storage.value)?.revision, 5);
 });
 
@@ -153,12 +153,55 @@ void test('notebook storage failure retains in-memory work and malformed rows st
   assert.deepEqual(parsed?.variations.map((item) => item.id), ['valid']);
 
   const storage = memoryStorage(null, true);
-  const persisted = persistNotebook(storage, [valid], 0, 'writer');
+  const persisted = persistNotebook(storage, { variations: [valid], deletedIds: [] }, 0, 'writer');
   assert.equal(persisted.ok, false);
   if (!persisted.ok) assert.equal(persisted.reason, 'full');
-  assert.deepEqual(persisted.variations, [valid]);
-  const hydrated = hydrateNotebook(storage, [valid]);
+  assert.deepEqual(persisted.state.variations, [valid]);
+  const hydrated = hydrateNotebook(storage, { variations: [valid], deletedIds: [] });
   assert.equal(hydrated.storageAvailable, true);
-  assert.deepEqual(hydrated.variations, [valid]);
-  assert.deepEqual(mergeVariations([valid], []), [valid]);
+  assert.deepEqual(hydrated.state.variations, [valid]);
+});
+
+void test('intentional delete stays deleted after save, reload, and another edit', () => {
+  const deleted = makeVariation('deleted', 'Delete me');
+  const kept = makeVariation('kept', 'Keep me');
+  const next = makeVariation('next', 'New work', 1);
+  const storage = memoryStorage(JSON.stringify({ version: 1, revision: 1, writer: 'old-tab', variations: [deleted, kept] }));
+  const initial = hydrateNotebook(storage).state;
+  const removed = deleteVariation(initial, deleted.id);
+  assert.equal(removed.ok, true);
+  if (!removed.ok) return;
+  const afterDelete = persistNotebook(storage, removed.state, 1, 'writer');
+  assert.equal(afterDelete.ok, true);
+  const afterReload = hydrateNotebook(storage).state;
+  assert.deepEqual(afterReload.variations.map((item) => item.id), [kept.id]);
+  const afterEdit = mergeNotebookState({ variations: [next], deletedIds: [] }, afterReload);
+  const afterEditSave = persistNotebook(storage, afterEdit, afterDelete.ok ? afterDelete.revision : 2, 'writer');
+  assert.equal(afterEditSave.ok, true);
+  const finalState = hydrateNotebook(storage).state;
+  assert.deepEqual(finalState.variations.map((item) => item.id), [next.id, kept.id]);
+  assert.ok(finalState.deletedIds.includes(deleted.id));
+});
+
+void test('equal-revision interleaving reports conflict and retains both tab rows', () => {
+  const tabA = makeVariation('tab-a', 'Tab A');
+  const tabB = makeVariation('tab-b', 'Tab B');
+  const base = JSON.stringify({ version: 1, revision: 7, writer: 'base', variations: [] });
+  const competingWrite = JSON.stringify({ version: 1, revision: 8, writer: 'tab-a', variations: [tabA] });
+  let reads = 0;
+  const storage: NotebookStorage = {
+    getItem: () => { reads += 1; return reads === 1 ? base : competingWrite; },
+    setItem: () => undefined,
+  };
+  const result = persistNotebook(storage, { variations: [tabB], deletedIds: [] }, 7, 'tab-b');
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.reason, 'conflict');
+    assert.deepEqual(result.state.variations.map((item) => item.id), [tabB.id, tabA.id]);
+  }
+});
+
+void test('save handler stays disabled until notebook hydration completes', () => {
+  assert.deepEqual(notebookSaveStatus(false), { ok: false, message: 'Notebook is still loading. Try again.' });
+  assert.deepEqual(notebookSaveStatus(true), { ok: true });
 });

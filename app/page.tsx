@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { downloadBlob, downloadText, requestPngBlob } from '@/lib/export-utils';
-import { hydrateNotebook, isPortableVariation, MAX_NOTEBOOK_BYTES, MAX_VARIATION_NAME_LENGTH, mergeVariations, parseNotebook, persistNotebook, STORAGE_KEY, type Variation } from '@/lib/notebook-storage';
+import { deleteVariation, hydrateNotebook, isPortableVariation, MAX_NOTEBOOK_BYTES, MAX_VARIATION_NAME_LENGTH, mergeNotebookState, mergeVariations, notebookSaveStatus, parseNotebook, persistNotebook, STORAGE_KEY, type NotebookState, type Variation } from '@/lib/notebook-storage';
 import {
   LESSONS,
   LIMITS,
@@ -150,6 +150,7 @@ export default function Home() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [beforeImage, setBeforeImage] = useState('');
   const [variations, setVariations] = useState<Variation[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [variationName, setVariationName] = useState('My field study');
   const [history, setHistory] = useState<Snapshot[]>([]);
   const [challengeComplete, setChallengeComplete] = useState(false);
@@ -158,14 +159,17 @@ export default function Home() {
   const storageReadyRef = useRef(false);
   const storageRevisionRef = useRef(0);
   const storageWriterRef = useRef(makeVariationId());
+  const notebookStateRef = useRef<NotebookState>({ variations: [], deletedIds: [] });
+  notebookStateRef.current = { variations, deletedIds };
   const challenge = useMemo(() => challengeStatus(lesson, params, compiledExpression), [compiledExpression, lesson, params]);
 
   useEffect(() => { lessonRef.current = lesson; paramsRef.current = params; expressionRef.current = compiledExpression; }, [compiledExpression, lesson, params]);
 
   useEffect(() => {
-    const hydrated = hydrateNotebook(window.localStorage);
+    const hydrated = hydrateNotebook(window.localStorage, notebookStateRef.current);
     storageRevisionRef.current = hydrated.revision;
-    setVariations((previous) => mergeVariations(previous, hydrated.variations));
+    setVariations(hydrated.state.variations);
+    setDeletedIds(hydrated.state.deletedIds);
     if (!hydrated.storageAvailable) setNotice('Notebook storage is unavailable; exports still work.');
     storageReadyRef.current = true;
     setNotebookHydrated(true);
@@ -173,17 +177,34 @@ export default function Home() {
 
   useEffect(() => {
     if (!storageReadyRef.current) return;
-    const persisted = persistNotebook(window.localStorage, variations, storageRevisionRef.current, storageWriterRef.current);
-    if (!persisted.ok) { setNotice(persisted.reason === 'unavailable' ? 'Notebook storage is unavailable; exports still work.' : 'Notebook storage is full; export a notebook to keep your work.'); return; }
+    const persisted = persistNotebook(window.localStorage, { variations, deletedIds }, storageRevisionRef.current, storageWriterRef.current);
+    if (!persisted.ok) {
+      if (persisted.reason === 'conflict') {
+        storageRevisionRef.current = persisted.revision;
+        setVariations(persisted.state.variations);
+        setDeletedIds(persisted.state.deletedIds);
+        setNotice('Notebook changed in another tab; unsaved work kept.');
+      } else setNotice(persisted.reason === 'unavailable' ? 'Notebook storage is unavailable; exports still work.' : 'Notebook storage is full; export a notebook to keep your work.');
+      return;
+    }
     storageRevisionRef.current = persisted.revision;
-    if (persisted.variations.length !== variations.length || persisted.variations.some((item, index) => item.id !== variations[index]?.id)) setVariations(persisted.variations);
-  }, [variations]);
+    if (persisted.state.variations.length !== variations.length || persisted.state.variations.some((item, index) => item.id !== variations[index]?.id) || persisted.state.deletedIds.length !== deletedIds.length || persisted.state.deletedIds.some((id, index) => id !== deletedIds[index])) {
+      setVariations(persisted.state.variations);
+      setDeletedIds(persisted.state.deletedIds);
+    }
+  }, [deletedIds, variations]);
 
   useEffect(() => {
     const receiveNotebook = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY) return;
       const incoming = parseNotebook(event.newValue);
-      if (incoming && incoming.revision > storageRevisionRef.current) { storageRevisionRef.current = incoming.revision; setVariations(incoming.variations); }
+      if (!incoming || (incoming.revision < storageRevisionRef.current) || (incoming.revision === storageRevisionRef.current && incoming.writer === storageWriterRef.current)) return;
+      const equalRevision = incoming.revision === storageRevisionRef.current;
+      const merged = mergeNotebookState(notebookStateRef.current, { variations: incoming.variations, deletedIds: incoming.deletedIds ?? [] });
+      storageRevisionRef.current = Math.max(storageRevisionRef.current, incoming.revision);
+      setVariations(merged.variations);
+      setDeletedIds(merged.deletedIds);
+      if (equalRevision) setNotice('Notebook changed in another tab; unsaved work kept.');
     };
     window.addEventListener('storage', receiveNotebook);
     return () => window.removeEventListener('storage', receiveNotebook);
@@ -199,12 +220,22 @@ export default function Home() {
   }, []);
 
   const saveVariation = useCallback((name = variationName) => {
+    const ready = notebookSaveStatus(notebookHydrated);
+    if (!ready.ok) { setNotice(ready.message); return { status: 'unavailable', message: ready.message }; }
     const trimmedName = (name.trim() || 'Untitled field').slice(0, MAX_VARIATION_NAME_LENGTH);
     const item: Variation = { id: makeVariationId(), name: trimmedName, lessonId: lessonRef.current.id, expression: expressionRef.current, params: { ...paramsRef.current }, savedAt: new Date().toISOString() };
     setVariations((previous) => mergeVariations([item], previous));
     setNotice(`Saved “${trimmedName}” to this device.`);
     return { status: 'saved', id: item.id, name: item.name };
-  }, [variationName]);
+  }, [notebookHydrated, variationName]);
+
+  const deleteSavedVariation = (id: string) => {
+    const result = deleteVariation(notebookStateRef.current, id);
+    if (!result.ok) { setNotice(result.message); return; }
+    setVariations(result.state.variations);
+    setDeletedIds(result.state.deletedIds);
+    setNotice('Variation deleted from this device.');
+  };
 
   useEffect(() => { actionRefs.current = { setParameter, saveVariation }; }, [saveVariation, setParameter]);
 
@@ -361,7 +392,7 @@ export default function Home() {
           <section className="panel controls-panel"><div className="panel-heading"><div><span className="eyebrow">01 / NUDGE A TERM</span><h2>Field controls</h2></div><Gauge size={18} /></div><div className="control-list">{lesson.parameters.map((control) => <div className="control-row" key={control.key}><div className="control-label"><label htmlFor={`control-${control.key}`}>{control.label}</label><output>{formatValue(params[control.key] ?? control.min, control.step)}</output></div><Slider id={`control-${control.key}`} min={control.min} max={control.max} step={control.step} value={[params[control.key] ?? control.min]} onValueChange={(value) => setParameter(control.key, Number((value as readonly number[])[0] ?? control.min))} aria-label={control.label} /><p>{control.help}</p></div>)}</div></section>
           <section className="panel expression-panel"><div className="panel-heading"><div><span className="eyebrow">02 / BOUNDED SOURCE</span><h2>Expression</h2></div><span className="cap-badge">{LIMITS.maxLength} chars max</span></div><p className="panel-copy">Edit the highlighted term only. The guide accepts numbers, named uniforms, vectors, and a small math vocabulary—no loops, macros, recursion, or hidden workload.</p><label className="sr-only" htmlFor="expression">Bounded GLSL expression</label><textarea id="expression" className={`code-input ${compileState === 'error' ? 'has-error' : ''}`} value={draftExpression} onChange={(event) => { setDraftExpression(event.target.value); setCompileState('draft'); setCompileMessage('Draft changed · compile to see it live'); }} spellCheck={false} rows={4} /><div className="source-meta"><span>depth ≤ {LIMITS.maxDepth}</span><span>ops ≤ {LIMITS.maxOperations}</span><span>GLSL ES 3.00</span></div><Button className="compile-button" onClick={compileDraft}><Sparkles /> Compile expression</Button><output className={`compile-status status-${compileState}`}><span className="status-icon">{compileState === 'error' ? '!' : compileState === 'draft' ? '·' : '✓'}</span><span>{compileMessage}</span></output></section>
           <section className="panel compare-panel"><div className="panel-heading"><div><span className="eyebrow">03 / SEE THE SHIFT</span><h2>Before / after</h2></div><History size={18} /></div><div className="compare-strip"><div className="compare-tile">{beforeImage ? <img src={beforeImage} alt="Previous compiled field" /> : <div className="compare-empty">Compile once<br />to set a baseline</div>}<span>BEFORE</span></div><div className="compare-arrow">→</div><div className="compare-tile current-tile"><canvas className="mini-canvas" ref={miniCanvasRef} /><span>NOW</span></div></div></section>
-          <section className="panel notebook-panel"><div className="panel-heading"><div><span className="eyebrow">04 / KEEP YOUR THREAD</span><h2>Personal notebook</h2></div><Save size={18} /></div><div className="save-row"><input value={variationName} onChange={(event) => setVariationName(event.target.value)} aria-label="Variation name" /><Button size="sm" onClick={() => saveVariation()} disabled={!notebookHydrated}><Save /> Save</Button></div><div className="notebook-actions"><Button variant="outline" size="sm" onClick={undo} disabled={!history.length}><Undo2 /> Undo</Button><Button variant="outline" size="sm" onClick={resetLesson}><RotateCcw /> Reset</Button></div><div className="variation-list" aria-busy={!notebookHydrated}>{!notebookHydrated ? <p className="empty-note">Loading notebook…</p> : variations.length === 0 ? <p className="empty-note">Saved variations stay on this device. Export the notebook for a portable copy.</p> : variations.slice(0, 4).map((item) => <div className="variation-item" key={item.id}><button className="variation-load" aria-label={`Load ${item.name}`} onClick={() => loadVariation(item)}><span className="variation-swatch" /><span><strong>{item.name}</strong><small>Lesson {String(item.lessonId).padStart(2, '0')}</small></span></button><button className="icon-button" onClick={() => setVariations((previous) => previous.filter((entry) => entry.id !== item.id))} aria-label={`Delete ${item.name}`}><Trash2 size={14} /></button></div>)}</div><div className="file-actions"><Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}><Import /> Import</Button><Button variant="ghost" size="sm" onClick={exportNotebook}><Download /> Export</Button><input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importNotebook} hidden /></div></section>
+          <section className="panel notebook-panel"><div className="panel-heading"><div><span className="eyebrow">04 / KEEP YOUR THREAD</span><h2>Personal notebook</h2></div><Save size={18} /></div><div className="save-row"><input value={variationName} onChange={(event) => setVariationName(event.target.value)} aria-label="Variation name" /><Button size="sm" onClick={() => saveVariation()} disabled={!notebookHydrated}><Save /> Save</Button></div><div className="notebook-actions"><Button variant="outline" size="sm" onClick={undo} disabled={!history.length}><Undo2 /> Undo</Button><Button variant="outline" size="sm" onClick={resetLesson}><RotateCcw /> Reset</Button></div><div className="variation-list" aria-busy={!notebookHydrated}>{!notebookHydrated ? <p className="empty-note">Loading notebook…</p> : variations.length === 0 ? <p className="empty-note">Saved variations stay on this device. Export the notebook for a portable copy.</p> : variations.slice(0, 4).map((item) => <div className="variation-item" key={item.id}><button className="variation-load" aria-label={`Load ${item.name}`} onClick={() => loadVariation(item)}><span className="variation-swatch" /><span><strong>{item.name}</strong><small>Lesson {String(item.lessonId).padStart(2, '0')}</small></span></button><button className="icon-button" onClick={() => deleteSavedVariation(item.id)} aria-label={`Delete ${item.name}`}><Trash2 size={14} /></button></div>)}</div><div className="file-actions"><Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}><Import /> Import</Button><Button variant="ghost" size="sm" onClick={exportNotebook}><Download /> Export</Button><input ref={fileInputRef} type="file" accept="application/json,.json" onChange={importNotebook} hidden /></div></section>
           <section className="panel export-panel"><div className="panel-heading"><div><span className="eyebrow">05 / TAKE IT WITH YOU</span><h2>Useful outputs</h2></div><Download size={18} /></div><p className="panel-copy">Leave with the exact source, the parameter configuration, or a PNG still—not a screenshot of the interface.</p><div className="export-grid"><Button variant="outline" size="sm" onClick={exportGLSL}><Download /> GLSL source</Button><Button variant="outline" size="sm" onClick={exportConfig}><FileJson /> Config JSON</Button><Button variant="outline" size="sm" onClick={exportPNG}><ImageDown /> PNG still</Button></div><label className="motion-toggle"><input type="checkbox" checked={reducedMotion} onChange={(event) => setReducedMotion(event.target.checked)} /><span>Reduce motion</span><small>freeze time-driven movement</small></label></section>
           <p className="support-note">WebGL2 is preferred for live GLSL. If unavailable, the Canvas fallback keeps the lesson interactive. This app does not claim driver-timeout guarantees.</p>
         </aside>

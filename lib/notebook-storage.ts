@@ -12,9 +12,11 @@ export { MAX_VARIATION_NAME_LENGTH } from './shader-engine.ts';
 export const STORAGE_KEY = 'shader-field-guide:notebook:v1';
 export const MAX_NOTEBOOK_BYTES = 64 * 1024;
 export const MAX_VARIATIONS = 20;
+export const MAX_DELETED_IDS = 256;
 
 export type Variation = { lessonId: LessonId; expression: string; params: ShaderParams; id: string; name: string; savedAt: string };
-export type NotebookEnvelope = { version: 1; revision: number; writer: string; variations: Variation[] };
+export type NotebookState = { variations: Variation[]; deletedIds: string[] };
+export type NotebookEnvelope = { version: 1; revision: number; writer: string; variations: Variation[]; deletedIds?: string[] };
 export type NotebookStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export function isPortableParams(value: unknown): value is ShaderParams {
@@ -34,7 +36,8 @@ export function parseNotebook(raw: string | null): NotebookEnvelope | null {
   try {
     const parsed = JSON.parse(raw) as Partial<NotebookEnvelope>;
     if (parsed.version !== 1 || typeof parsed.revision !== 'number' || !Number.isFinite(parsed.revision) || !Array.isArray(parsed.variations)) return null;
-    return { version: 1, revision: parsed.revision, writer: typeof parsed.writer === 'string' ? parsed.writer : 'unknown', variations: parsed.variations.filter(isPortableVariation).slice(0, MAX_VARIATIONS) };
+    const deletedIds = Array.isArray(parsed.deletedIds) ? [...new Set(parsed.deletedIds.filter((id): id is string => typeof id === 'string'))].slice(0, MAX_DELETED_IDS) : [];
+    return { version: 1, revision: parsed.revision, writer: typeof parsed.writer === 'string' ? parsed.writer : 'unknown', variations: parsed.variations.filter(isPortableVariation).slice(0, MAX_VARIATIONS), deletedIds };
   } catch { return null; }
 }
 
@@ -44,28 +47,51 @@ export function mergeVariations(primary: Variation[], secondary: Variation[]) {
   return [...byId.values()].slice(0, MAX_VARIATIONS);
 }
 
-export function hydrateNotebook(storage: NotebookStorage, earlyVariations: Variation[] = []) {
+export function mergeNotebookState(primary: NotebookState, secondary: NotebookState): NotebookState {
+  const deletedIds = [...new Set([...primary.deletedIds, ...secondary.deletedIds])].slice(0, MAX_DELETED_IDS);
+  const deleted = new Set(deletedIds);
+  return { deletedIds, variations: mergeVariations(primary.variations, secondary.variations).filter((item) => !deleted.has(item.id)) };
+}
+
+export function deleteVariation(state: NotebookState, id: string) {
+  if (!state.variations.some((item) => item.id === id)) return { ok: true as const, state };
+  if (state.deletedIds.includes(id)) return { ok: true as const, state: { variations: state.variations.filter((item) => item.id !== id), deletedIds: state.deletedIds } };
+  if (state.deletedIds.length >= MAX_DELETED_IDS) return { ok: false as const, message: 'Deletion history is full; export your notebook before deleting more.', state };
+  return { ok: true as const, state: { variations: state.variations.filter((item) => item.id !== id), deletedIds: [...state.deletedIds, id] } };
+}
+
+export function notebookSaveStatus(hydrated: boolean) {
+  return hydrated ? { ok: true as const } : { ok: false as const, message: 'Notebook is still loading. Try again.' };
+}
+
+export function hydrateNotebook(storage: NotebookStorage, earlyState: NotebookState = { variations: [], deletedIds: [] }) {
   try {
     const saved = parseNotebook(storage.getItem(STORAGE_KEY));
-    return { storageAvailable: true, revision: saved?.revision ?? 0, variations: mergeVariations(earlyVariations, saved?.variations ?? []) };
+    const storedState = { variations: saved?.variations ?? [], deletedIds: saved?.deletedIds ?? [] };
+    return { storageAvailable: true, revision: saved?.revision ?? 0, state: mergeNotebookState(earlyState, storedState) };
   } catch {
-    return { storageAvailable: false, revision: 0, variations: earlyVariations };
+    return { storageAvailable: false, revision: 0, state: earlyState };
   }
 }
 
-export function persistNotebook(storage: NotebookStorage, variations: Variation[], currentRevision: number, writer: string) {
+export function persistNotebook(storage: NotebookStorage, state: NotebookState, currentRevision: number, writer: string) {
   let persisted: NotebookEnvelope | null;
   try {
     persisted = parseNotebook(storage.getItem(STORAGE_KEY));
   } catch {
-    return { ok: false as const, reason: 'unavailable' as const, revision: currentRevision, variations };
+    return { ok: false as const, reason: 'unavailable' as const, revision: currentRevision, state };
   }
-  const merged = mergeVariations(variations, persisted?.variations ?? []);
+  const merged = mergeNotebookState(state, { variations: persisted?.variations ?? [], deletedIds: persisted?.deletedIds ?? [] });
   const revision = Math.max(currentRevision, persisted?.revision ?? 0) + 1;
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, revision, writer, variations: merged } satisfies NotebookEnvelope));
-    return { ok: true as const, revision, variations: merged };
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, revision, writer, variations: merged.variations, deletedIds: merged.deletedIds } satisfies NotebookEnvelope));
+    const observed = parseNotebook(storage.getItem(STORAGE_KEY));
+    if (observed && (observed.revision > revision || (observed.revision === revision && observed.writer !== writer))) {
+      const conflictState = mergeNotebookState(merged, { variations: observed.variations, deletedIds: observed.deletedIds ?? [] });
+      return { ok: false as const, reason: 'conflict' as const, revision: observed.revision, state: conflictState };
+    }
+    return { ok: true as const, revision, state: merged };
   } catch {
-    return { ok: false as const, reason: 'full' as const, revision: currentRevision, variations };
+    return { ok: false as const, reason: 'full' as const, revision: currentRevision, state };
   }
 }
