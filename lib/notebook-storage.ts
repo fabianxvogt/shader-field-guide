@@ -53,6 +53,26 @@ export function mergeNotebookState(primary: NotebookState, secondary: NotebookSt
   return { deletedIds, variations: mergeVariations(primary.variations, secondary.variations).filter((item) => !deleted.has(item.id)) };
 }
 
+function canonicalState(state: NotebookState) {
+  const variations = state.variations
+    .map((item) => ({ ...item, params: Object.fromEntries(Object.entries(item.params).sort(([a], [b]) => a.localeCompare(b))) }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return JSON.stringify({ deletedIds: [...new Set(state.deletedIds)].sort(), variations });
+}
+
+export function notebookStatesEqual(first: NotebookState, second: NotebookState) {
+  return canonicalState(first) === canonicalState(second);
+}
+
+export function adoptNotebookEvent(current: NotebookState, currentRevision: number, localWriter: string, incoming: NotebookEnvelope) {
+  if (incoming.revision < currentRevision || (incoming.revision === currentRevision && incoming.writer === localWriter)) {
+    return { accepted: false as const, changed: false as const, conflict: false as const, revision: currentRevision, state: current };
+  }
+  const merged = mergeNotebookState(current, { variations: incoming.variations, deletedIds: incoming.deletedIds ?? [] });
+  const changed = !notebookStatesEqual(current, merged);
+  return { accepted: true as const, changed, conflict: changed && incoming.revision === currentRevision, revision: Math.max(currentRevision, incoming.revision), state: changed ? merged : current };
+}
+
 export function deleteVariation(state: NotebookState, id: string) {
   if (!state.variations.some((item) => item.id === id)) return { ok: true as const, state };
   if (state.deletedIds.includes(id)) return { ok: true as const, state: { variations: state.variations.filter((item) => item.id !== id), deletedIds: state.deletedIds } };

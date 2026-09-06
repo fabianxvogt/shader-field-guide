@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { downloadBlob, downloadText, DOWNLOAD_CLEANUP_DELAY_MS, requestPngBlob } from '../lib/export-utils.ts';
-import { deleteVariation, hydrateNotebook, mergeNotebookState, notebookSaveStatus, parseNotebook, persistNotebook, type NotebookStorage, type Variation } from '../lib/notebook-storage.ts';
+import { adoptNotebookEvent, deleteVariation, hydrateNotebook, mergeNotebookState, notebookSaveStatus, notebookStatesEqual, parseNotebook, persistNotebook, type NotebookStorage, type Variation } from '../lib/notebook-storage.ts';
 import { LESSONS, LIMITS, challengeStatus, evaluateFieldAt, makeConfig, makeFragmentShader, normalizeParameter, validateExpression, validateParameters, type ShaderParams } from '../lib/shader-engine.ts';
 
 void test('all five lessons have valid bounded expressions and generated source', () => {
@@ -199,6 +199,30 @@ void test('equal-revision interleaving reports conflict and retains both tab row
     assert.equal(result.reason, 'conflict');
     assert.deepEqual(result.state.variations.map((item) => item.id), [tabB.id, tabA.id]);
   }
+});
+
+void test('identical tab adoption is logically quiet while competing changes converge once', () => {
+  const shared = makeVariation('shared', 'Shared work');
+  const tabA = { variations: [shared], deletedIds: [] };
+  const sameIncoming = { version: 1 as const, revision: 4, writer: 'tab-b', variations: [shared] };
+  const noOp = adoptNotebookEvent(tabA, 3, 'tab-a', sameIncoming);
+  assert.equal(noOp.accepted, true);
+  assert.equal(noOp.changed, false);
+  assert.equal(noOp.conflict, false);
+  assert.equal(noOp.revision, 4);
+  assert.equal(notebookStatesEqual(noOp.state, tabA), true);
+
+  const competing = makeVariation('competing', 'Competing work');
+  const conflictIncoming = { version: 1 as const, revision: 4, writer: 'tab-b', variations: [shared, competing] };
+  const merged = adoptNotebookEvent(tabA, 4, 'tab-a', conflictIncoming);
+  assert.equal(merged.changed, true);
+  assert.equal(merged.conflict, true);
+  assert.deepEqual(merged.state.variations.map((item) => item.id), ['shared', 'competing']);
+
+  const echoed = adoptNotebookEvent(merged.state, merged.revision, 'tab-a', { ...conflictIncoming, writer: 'tab-b' });
+  assert.equal(echoed.changed, false);
+  assert.equal(echoed.conflict, false);
+  assert.equal(echoed.revision, 4);
 });
 
 void test('save handler stays disabled until notebook hydration completes', () => {

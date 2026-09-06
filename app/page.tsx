@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { downloadBlob, downloadText, requestPngBlob } from '@/lib/export-utils';
-import { deleteVariation, hydrateNotebook, isPortableVariation, MAX_NOTEBOOK_BYTES, MAX_VARIATION_NAME_LENGTH, mergeNotebookState, mergeVariations, notebookSaveStatus, parseNotebook, persistNotebook, STORAGE_KEY, type NotebookState, type Variation } from '@/lib/notebook-storage';
+import { adoptNotebookEvent, deleteVariation, hydrateNotebook, isPortableVariation, MAX_NOTEBOOK_BYTES, MAX_VARIATION_NAME_LENGTH, mergeVariations, notebookSaveStatus, parseNotebook, persistNotebook, STORAGE_KEY, type NotebookState, type Variation } from '@/lib/notebook-storage';
 import {
   LESSONS,
   LIMITS,
@@ -198,13 +198,14 @@ export default function Home() {
     const receiveNotebook = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY) return;
       const incoming = parseNotebook(event.newValue);
-      if (!incoming || (incoming.revision < storageRevisionRef.current) || (incoming.revision === storageRevisionRef.current && incoming.writer === storageWriterRef.current)) return;
-      const equalRevision = incoming.revision === storageRevisionRef.current;
-      const merged = mergeNotebookState(notebookStateRef.current, { variations: incoming.variations, deletedIds: incoming.deletedIds ?? [] });
-      storageRevisionRef.current = Math.max(storageRevisionRef.current, incoming.revision);
-      setVariations(merged.variations);
-      setDeletedIds(merged.deletedIds);
-      if (equalRevision) setNotice('Notebook changed in another tab; unsaved work kept.');
+      if (!incoming) return;
+      const adoption = adoptNotebookEvent(notebookStateRef.current, storageRevisionRef.current, storageWriterRef.current, incoming);
+      if (!adoption.accepted) return;
+      storageRevisionRef.current = adoption.revision;
+      if (!adoption.changed) return;
+      setVariations(adoption.state.variations);
+      setDeletedIds(adoption.state.deletedIds);
+      if (adoption.conflict) setNotice('Notebook changed in another tab; unsaved work kept.');
     };
     window.addEventListener('storage', receiveNotebook);
     return () => window.removeEventListener('storage', receiveNotebook);
