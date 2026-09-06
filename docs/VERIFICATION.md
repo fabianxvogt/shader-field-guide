@@ -11,7 +11,7 @@
 - The editable source now parses a bounded expression grammar with token count, nesting, operator, arity, and scalar/vector type checks before GLSL generation.
 - UI and WebMCP parameter writes clamp only known current-lesson controls; non-finite, unknown, and imported out-of-range values are rejected. Portable notebook names and files are capped.
 - Canvas fallback calls the same parsed expression evaluator used for challenge sampling, with the same lesson coordinate transforms and post-field clamp/pow steps.
-- Notebook hydration shows a loading state, merges any early in-memory save with the stored envelope, and cannot replace that early work with the pre-hydration snapshot. Writes merge against the latest localStorage envelope and retain in-memory work when storage writes fail; revisions are listened to across tabs.
+- Notebook hydration shows a loading state, merges any early in-memory save with the stored envelope, and cannot replace that early work with the pre-hydration snapshot. Bounded deletion tombstones keep intentional deletes from returning after union merges. Writes merge against the latest localStorage envelope, detect equal-revision read-back conflicts, retain in-memory work when storage writes fail, and report cross-tab conflicts; this is safe conflict behavior, not a linearizability claim.
 
 ## Deferred by instruction
 
