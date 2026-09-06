@@ -3,7 +3,7 @@
 ## Now
 
 - Classification: **INCREMENTAL** — accepted implementation repair backed by source fixtures; no browser/device performance or learning-efficacy claim.
-- [x] Reviewed ordinary source published at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`, exact accepted product source `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`.
+- [x] Initial ordinary source publication is preserved at [github.com/fabianxvogt/shader-field-guide](https://github.com/fabianxvogt/shader-field-guide), branch `codex/v1`, from product source `011ef89dc5b0860b64c40b3e2dfd7ae091645e2a`; the current accepted runtime identity is recorded below.
 - [x] Site version 6 deployed as the public preview from saved source revision `0ef3da730762ec5f3d6559e2762b197dd24b835a`, with unchanged accepted runtime product `35f5d4005835df184d106b4a96d122d2b95296fc`: [shader-field-guide.fabian523417.chatgpt.site](https://shader-field-guide.fabian523417.chatgpt.site).
 - [x] CSS-only 390px output-row repair published at exact source `8e6656d8e772ee92f3c2839d7764e853b50e69e6`; it is included in the reviewed v6 runtime.
 - [x] Shared output-button sizing repair published at exact source `35f5d4005835df184d106b4a96d122d2b95296fc`; it is included in the reviewed v6 runtime.
