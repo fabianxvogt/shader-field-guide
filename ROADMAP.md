@@ -2,6 +2,8 @@
 
 ## Now
 
+- Classification: **INCREMENTAL** — implementation repair backed by source fixtures; no browser/device performance or learning-efficacy claim.
+- [x] Independent review blockers repaired: parser grammar/type checks, finite/range parameter validation, edited-expression CPU fallback, challenge semantics, bounded notebook input, and storage hydration/merge guards.
 - [x] Standalone repository rooted at this project, branch `codex/v1`.
 - [x] Five progressive visual lessons with reviewed starting equations.
 - [x] Real bounded expression validation and generated GLSL ES 3.00 fragment source.

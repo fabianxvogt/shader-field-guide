@@ -2,9 +2,16 @@
 
 ## Local checks
 
-- `npm run test` covers all five lesson expressions, generated fragment source, the expression safety boundary, explicit caps, and meaningful challenge properties.
+- `npm run test` covers all five lesson expressions, generated fragment source, adversarial grammar/arity/type cases, explicit caps, finite/range parameter validation, CPU fallback use of the edited expression, and all five meaningful challenge properties including rejection of constant `0.0`.
 - `npm run lint` is the source hygiene check.
 - `npm run build` is the production compilation check.
+
+## Repair evidence
+
+- The editable source now parses a bounded expression grammar with token count, nesting, operator, arity, and scalar/vector type checks before GLSL generation.
+- UI and WebMCP parameter writes clamp only known current-lesson controls; non-finite, unknown, and imported out-of-range values are rejected. Portable notebook names and files are capped.
+- Canvas fallback calls the same parsed expression evaluator used for challenge sampling, with the same lesson coordinate transforms and post-field clamp/pow steps.
+- Notebook hydration is guarded so the initial empty render cannot overwrite saved state. Writes merge against the latest localStorage envelope and revisions are listened to across tabs.
 
 ## Deferred by instruction
 

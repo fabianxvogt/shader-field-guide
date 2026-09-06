@@ -27,21 +27,28 @@ import { Slider } from '@/components/ui/slider';
 import {
   LESSONS,
   LIMITS,
+  MAX_VARIATION_NAME_LENGTH,
   type Lesson,
   type LessonId,
   type ShaderParams,
   challengeStatus,
+  evaluateFieldAt,
   makeConfig,
   makeFragmentShader,
+  normalizeParameter,
   validateExpression,
+  validateParameters,
 } from '@/lib/shader-engine';
 
 type RenderMode = 'webgl2' | 'fallback' | 'error';
 type CompileState = 'clean' | 'draft' | 'error';
 type Snapshot = { lessonId: LessonId; expression: string; params: ShaderParams };
 type Variation = Snapshot & { id: string; name: string; savedAt: string };
+type NotebookEnvelope = { version: 1; revision: number; writer: string; variations: Variation[] };
 
 const STORAGE_KEY = 'shader-field-guide:notebook:v1';
+const MAX_NOTEBOOK_BYTES = 64 * 1024;
+const MAX_VARIATIONS = 20;
 const VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 void main() { gl_Position = vec4(a_position, 0.0, 1.0); }`;
@@ -75,7 +82,23 @@ function isPortableParams(value: unknown): value is ShaderParams {
 function isPortableVariation(value: unknown): value is Variation {
   if (!value || typeof value !== 'object') return false;
   const item = value as Partial<Variation>;
-  return typeof item.name === 'string' && typeof item.expression === 'string' && typeof item.lessonId === 'number' && LESSONS.some((lesson) => lesson.id === item.lessonId) && isPortableParams(item.params) && validateExpression(item.expression).ok;
+  const lesson = LESSONS.find((entry) => entry.id === item.lessonId);
+  return typeof item.id === 'string' && typeof item.name === 'string' && item.name.length > 0 && item.name.length <= MAX_VARIATION_NAME_LENGTH && typeof item.expression === 'string' && Boolean(lesson) && isPortableParams(item.params) && Boolean(lesson && validateParameters(lesson, item.params).ok) && validateExpression(item.expression).ok;
+}
+
+function parseNotebook(raw: string | null): NotebookEnvelope | null {
+  if (!raw || raw.length > MAX_NOTEBOOK_BYTES) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<NotebookEnvelope>;
+    if (parsed.version !== 1 || typeof parsed.revision !== 'number' || !Number.isFinite(parsed.revision) || !Array.isArray(parsed.variations)) return null;
+    return { version: 1, revision: parsed.revision, writer: typeof parsed.writer === 'string' ? parsed.writer : 'unknown', variations: parsed.variations.filter(isPortableVariation).slice(0, MAX_VARIATIONS) };
+  } catch { return null; }
+}
+
+function mergeVariations(primary: Variation[], secondary: Variation[]) {
+  const byId = new Map<string, Variation>();
+  for (const item of [...primary, ...secondary]) if (!byId.has(item.id)) byId.set(item.id, item);
+  return [...byId.values()].slice(0, MAX_VARIATIONS);
 }
 
 function getWebGL2(canvas: HTMLCanvasElement) {
@@ -95,51 +118,44 @@ function compileProgram(gl: WebGL2RenderingContext, fragmentSource: string) {
     }
     return shader;
   };
-  const vertex = compile(gl.VERTEX_SHADER, VERTEX_SHADER);
-  const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource);
-  const program = gl.createProgram();
-  if (!program) throw new Error('WebGL could not create a program.');
-  gl.attachShader(program, vertex);
-  gl.attachShader(program, fragment);
-  gl.linkProgram(program);
-  gl.deleteShader(vertex);
-  gl.deleteShader(fragment);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const info = gl.getProgramInfoLog(program) || 'Unknown GLSL link error.';
-    gl.deleteProgram(program);
-    throw new Error(info.trim());
+  let vertex: WebGLShader | null = null;
+  let fragment: WebGLShader | null = null;
+  let program: WebGLProgram | null = null;
+  try {
+    vertex = compile(gl.VERTEX_SHADER, VERTEX_SHADER);
+    fragment = compile(gl.FRAGMENT_SHADER, fragmentSource);
+    program = gl.createProgram();
+    if (!program) throw new Error('WebGL could not create a program.');
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const info = gl.getProgramInfoLog(program) || 'Unknown GLSL link error.';
+      throw new Error(info.trim());
+    }
+    return program;
+  } catch (error) {
+    if (program) gl.deleteProgram(program);
+    throw error;
+  } finally {
+    if (vertex) gl.deleteShader(vertex);
+    if (fragment) gl.deleteShader(fragment);
   }
-  return program;
 }
 
-function drawFallback(ctx: CanvasRenderingContext2D, lesson: Lesson, params: ShaderParams, time: number) {
+function drawFallback(ctx: CanvasRenderingContext2D, lesson: Lesson, expression: string, params: ShaderParams, time: number) {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
   const image = ctx.createImageData(width, height);
   const aspect = width / height;
-  const seconds = time / 1000;
-  const hueShift = lesson.id === 5 ? Math.sin(seconds * params.speed) * 0.16 : 0;
+  const seconds = time;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const px = (x / width) * 2 - 1;
       const py = (y / height) * 2 - 1;
       const sx = px * aspect;
       const sy = py;
-      let qx = sx;
-      let qy = sy;
-      if (lesson.id >= 4) {
-        qx = ((sx * params.cells + 0.5) % 1 + 1) % 1 - 0.5;
-        qy = ((sy * params.cells + 0.5) % 1 + 1) % 1 - 0.5;
-      }
-      if (lesson.id === 5) qx += Math.sin(seconds * params.speed) * params.drift;
-      const distance = Math.hypot(qx - params.centerX, qy - params.centerY);
-      let field = 0;
-      if (lesson.id === 1) field = 1 - Math.min(1, distance * 1.6);
-      if (lesson.id === 2) field = 1 - Math.min(1, Math.abs(distance - params.radius) / Math.max(params.softness, 0.002));
-      if (lesson.id === 3) field = 0.5 + 0.5 * Math.sin((sx + sy) * 4 + hueShift * 4);
-      if (lesson.id === 4) field = 0.5 + 0.5 * Math.cos(qx * 18) * Math.cos(qy * 18);
-      if (lesson.id === 5) field = 0.5 + 0.5 * Math.cos(Math.hypot(qx, qy) * 20 - seconds * params.speed * 2);
-      field = Math.max(0, Math.min(1, Math.pow(Math.max(0, field), 1 / Math.max(params.contrast, 0.2))));
+      const field = evaluateFieldAt(expression, lesson, params, seconds, sx / aspect, sy, width, height);
       const mix = Math.max(0, Math.min(1, params.mix));
       const r = (10 + field * 58) * (1 - mix) + (220 - field * 50) * mix;
       const g = (38 + field * 210) * (1 - mix) + (48 + field * 160) * mix;
@@ -166,7 +182,7 @@ export default function Home() {
   const paramsRef = useRef<ShaderParams>({});
   const lessonRef = useRef<Lesson>(LESSONS[0]);
   const expressionRef = useRef(LESSONS[0].expression);
-  const actionRefs = useRef<{ setParameter: (key: string, value: number) => void; saveVariation: (name?: string) => { status: string; id?: string; name?: string } }>({ setParameter: () => undefined, saveVariation: () => ({ status: 'unavailable' }) });
+  const actionRefs = useRef<{ setParameter: (key: string, value: number) => { status: string; key?: string; value?: number; message?: string }; saveVariation: (name?: string) => { status: string; id?: string; name?: string } }>({ setParameter: () => ({ status: 'unavailable' }), saveVariation: () => ({ status: 'unavailable' }) });
   const [lessonIndex, setLessonIndex] = useState(0);
   const lesson = LESSONS[lessonIndex];
   const [params, setParams] = useState<ShaderParams>(lesson.defaults);
@@ -183,35 +199,57 @@ export default function Home() {
   const [history, setHistory] = useState<Snapshot[]>([]);
   const [challengeComplete, setChallengeComplete] = useState(false);
   const [notice, setNotice] = useState('');
+  const storageReadyRef = useRef(false);
+  const storageRevisionRef = useRef(0);
+  const storageWriterRef = useRef(makeVariationId());
   const challenge = useMemo(() => challengeStatus(lesson, params, compiledExpression), [compiledExpression, lesson, params]);
 
   useEffect(() => { lessonRef.current = lesson; paramsRef.current = params; expressionRef.current = compiledExpression; }, [compiledExpression, lesson, params]);
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as { version?: number; variations?: Variation[] };
-        if (parsed.version === 1 && Array.isArray(parsed.variations)) setVariations(parsed.variations.filter(isPortableVariation).slice(0, 20));
-      }
+      const saved = parseNotebook(window.localStorage.getItem(STORAGE_KEY));
+      if (saved) { storageRevisionRef.current = saved.revision; setVariations(saved.variations); }
     } catch { setNotice('Notebook storage is unavailable; exports still work.'); }
+    storageReadyRef.current = true;
   }, []);
 
   useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, variations })); }
+    if (!storageReadyRef.current) return;
+    try {
+      const persisted = parseNotebook(window.localStorage.getItem(STORAGE_KEY));
+      const merged = mergeVariations(variations, persisted?.variations ?? []);
+      const revision = Math.max(storageRevisionRef.current, persisted?.revision ?? 0) + 1;
+      storageRevisionRef.current = revision;
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, revision, writer: storageWriterRef.current, variations: merged } satisfies NotebookEnvelope));
+      if (merged.length !== variations.length || merged.some((item, index) => item.id !== variations[index]?.id)) setVariations(merged);
+    }
     catch { setNotice('Notebook storage is full; export a notebook to keep your work.'); }
   }, [variations]);
 
+  useEffect(() => {
+    const receiveNotebook = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      const incoming = parseNotebook(event.newValue);
+      if (incoming && incoming.revision > storageRevisionRef.current) { storageRevisionRef.current = incoming.revision; setVariations(incoming.variations); }
+    };
+    window.addEventListener('storage', receiveNotebook);
+    return () => window.removeEventListener('storage', receiveNotebook);
+  }, []);
+
   const setParameter = useCallback((key: string, value: number) => {
-    setHistory((previous) => [...previous.slice(-19), { lessonId: lessonRef.current.id, expression: expressionRef.current, params: paramsRef.current }]);
-    setParams((previous) => ({ ...previous, [key]: value }));
+    const normalized = normalizeParameter(lessonRef.current, key, value);
+    if (!normalized.ok) { setNotice(normalized.message); return { status: 'rejected', message: normalized.message }; }
+    setHistory((previous) => [...previous.slice(-19), { lessonId: lessonRef.current.id, expression: expressionRef.current, params: { ...paramsRef.current } }]);
+    setParams((previous) => ({ ...previous, [key]: normalized.value }));
     setChallengeComplete(false);
+    return { status: 'updated', key, value: normalized.value };
   }, []);
 
   const saveVariation = useCallback((name = variationName) => {
-    const trimmedName = name.trim() || 'Untitled field';
+    const trimmedName = (name.trim() || 'Untitled field').slice(0, MAX_VARIATION_NAME_LENGTH);
     const item: Variation = { id: makeVariationId(), name: trimmedName, lessonId: lessonRef.current.id, expression: expressionRef.current, params: { ...paramsRef.current }, savedAt: new Date().toISOString() };
-    setVariations((previous) => [item, ...previous].slice(0, 20));
+    setVariations((previous) => mergeVariations([item], previous));
     setNotice(`Saved “${trimmedName}” to this device.`);
     return { status: 'saved', id: item.id, name: item.name };
   }, [variationName]);
@@ -226,7 +264,7 @@ export default function Home() {
       name: 'set_field_parameter', title: 'Set a shader field parameter', description: 'Change one visible bounded parameter in the current Shader Field Guide lesson.',
       inputSchema: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'number' } }, required: ['key', 'value'], additionalProperties: false },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute(input) { const value = input as { key?: string; value?: number }; if (!value.key || typeof value.value !== 'number') throw new Error('key and numeric value are required'); actionRefs.current.setParameter(value.key, value.value); return { status: 'updated', key: value.key, value: value.value }; },
+      execute(input) { const value = input as { key?: string; value?: number }; if (!value.key || typeof value.value !== 'number') throw new Error('key and numeric value are required'); const result = actionRefs.current.setParameter(value.key, value.value); if (result.status !== 'updated') throw new Error(result.message || 'Parameter was rejected'); return result; },
     }, { signal: lifecycle.signal })).catch(() => undefined);
     void Promise.resolve(modelContext.registerTool({
       name: 'save_field_variation', title: 'Save current shader field variation', description: 'Save the current real shader expression and parameters to the local notebook.',
@@ -275,7 +313,7 @@ export default function Home() {
       else {
         setRenderMode('fallback'); setCompileMessage('WebGL2 unavailable · using bounded Canvas fallback');
         const draw = (now: number) => {
-          drawFallback(ctx!, lessonRef.current, paramsRef.current, paused || reducedMotion ? 0 : now - start);
+          drawFallback(ctx!, lessonRef.current, expressionRef.current, paramsRef.current, paused || reducedMotion ? 0 : (now - start) / 1000);
           const mini = miniCanvasRef.current?.getContext('2d');
           if (mini) { mini.canvas.width = 160; mini.canvas.height = 106; mini.drawImage(canvas, 0, 0, 160, 106); }
           animationFrame = requestAnimationFrame(draw);
@@ -320,10 +358,11 @@ export default function Home() {
   const importNotebook = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
     try {
-      const parsed = JSON.parse(await file.text()) as { format?: string; version?: number; variations?: Variation[] };
+      if (file.size > MAX_NOTEBOOK_BYTES) throw new Error(`Notebook is larger than the ${MAX_NOTEBOOK_BYTES / 1024} KB limit.`);
+      const parsed = JSON.parse(await file.slice(0, MAX_NOTEBOOK_BYTES + 1).text()) as { format?: string; version?: number; variations?: Variation[] };
       if (parsed.format !== 'shader-field-guide-notebook' || parsed.version !== 1 || !Array.isArray(parsed.variations)) throw new Error('This is not a Shader Field Guide v1 notebook.');
       const valid = parsed.variations.filter(isPortableVariation);
-      setVariations((previous) => [...valid, ...previous].slice(0, 20)); setNotice(`Imported ${valid.length} variation${valid.length === 1 ? '' : 's'}.`);
+      setVariations((previous) => mergeVariations(valid, previous)); setNotice(`Imported ${valid.length} variation${valid.length === 1 ? '' : 's'}.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not read that notebook.'); }
   };
   const exportGLSL = () => { downloadText(makeFragmentShader(lesson, compiledExpression), `shader-field-guide-lesson-${lesson.id}.frag`); downloadText(JSON.stringify(makeConfig(lesson, params, compiledExpression), null, 2), `shader-field-guide-lesson-${lesson.id}.json`, 'application/json'); setNotice('GLSL source and its configuration exported.'); };

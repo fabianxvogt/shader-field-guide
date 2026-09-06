@@ -23,11 +23,11 @@ npm run lint
 npm run build
 ```
 
-The app prefers WebGL2 and compiles a real fragment shader on each accepted expression. Browsers without WebGL2 use a bounded Canvas 2D fallback. LocalStorage is device-local only; notebook JSON import/export is the portable path.
+The app prefers WebGL2 and compiles a real fragment shader on each accepted expression. Browsers without WebGL2 use a bounded Canvas 2D evaluator with the same edited expression grammar and coordinate semantics. LocalStorage is device-local only; notebook JSON import/export is the portable path.
 
 ## Boundaries
 
-The editable expression is capped at 240 characters, nesting depth 8, and 32 operators. Only an allowlisted set of identifiers and math functions is accepted. Statements, assignments, comments, control flow, macros, loops, recursion, and arbitrary shader source are excluded. These are product bounds, not a claim of driver timeout guarantees.
+The editable expression is capped at 240 characters, 96 tokens, nesting depth 8, and 32 operators. A real parser checks token order, function arity, scalar/vector types, finite numeric literals, and an allowlisted set of identifiers and math functions. Statements, assignments, comments, control flow, macros, loops, recursion, and arbitrary shader source are excluded. Notebook imports are capped at 64 KB, 20 variations, 80-character names, known parameters, and declared finite ranges. These are product bounds, not a claim of driver timeout guarantees.
 
 ## Evidence and next gate
 
