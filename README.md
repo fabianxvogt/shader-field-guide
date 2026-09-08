@@ -1,3 +1,13 @@
+<!-- portfolio
+{
+  "title": "Shader Field Guide",
+  "topic": "Education/Interactive learning",
+  "type": "product",
+  "description": "A bounded browser-first GLSL learning lab with five visual lessons and portable exports",
+  "demo": "https://shader-field-guide.fabian523417.chatgpt.site"
+}
+-->
+
 # Shader Field Guide
 
 Catalog 62 · standalone v1 browser app · branch `codex/v1`
